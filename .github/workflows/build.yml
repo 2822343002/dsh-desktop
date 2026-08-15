@@ -52,20 +52,21 @@ jobs:
         if: matrix.platform == 'win'
         run: bash scripts/patch-portable-nsi.sh
 
-      - name: 配置签名环境（仅当证书 secrets 已配置时注入）
-        if: ${{ secrets.CSC_LINK != '' }}
-        run: |
-          echo "CSC_LINK=${{ secrets.CSC_LINK }}" >> "$GITHUB_ENV"
-          echo "CSC_KEY_PASSWORD=${{ secrets.CSC_KEY_PASSWORD }}" >> "$GITHUB_ENV"
-          echo "APPLE_ID=${{ secrets.APPLE_ID }}" >> "$GITHUB_ENV"
-          echo "APPLE_APP_SPECIFIC_PASSWORD=${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}" >> "$GITHUB_ENV"
-          echo "APPLE_TEAM_ID=${{ secrets.APPLE_TEAM_ID }}" >> "$GITHUB_ENV"
-
       - name: 构建产物（有签名证书时自动签名）
         working-directory: dsh-desktop
-        run: npx electron-builder ${{ matrix.target }} --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false" # 无证书时跳过签名
+          # secrets 未配置时展开为空字符串；shell 内非空才保留（否则 unset）
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -z "$CSC_LINK" ]; then
+            unset CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID
+          fi
+          npx electron-builder ${{ matrix.target }} --publish never
 
       - name: 上传产物
         uses: actions/upload-artifact@v4
