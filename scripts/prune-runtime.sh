@@ -5,6 +5,11 @@
 # 说明: 在打包前调用；会就地删除 runtime/node_modules 中非目标平台的原生模块。
 set -euo pipefail
 
+# PRUNE_DEBUG=1 时输出执行跟踪（用于 CI 排障）
+if [ "${PRUNE_DEBUG:-}" = "1" ]; then
+  set -x
+fi
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RUNTIME="$ROOT/runtime/node_modules"
 TARGET="${1:-auto}"
@@ -37,7 +42,9 @@ for d in $NPTY_DIRS; do
     [ -d "$sub" ] || continue
     name=$(basename "$sub")
     if [ "$name" != "$KEEP" ]; then
-      sz=$(du -sk "$sub" 2>/dev/null | cut -f1 || echo 0)
+      # du 可能输出为空（目录刚被删/无权限），用 ${sz:-0} 兜底防止算术错误
+      sz=$(du -sk "$sub" 2>/dev/null | cut -f1 || true)
+      sz=${sz:-0}
       rm -rf "$sub"
       pruned_bytes=$((pruned_bytes + sz))
       echo "  删除 $name ($((sz/1024))MB)"
@@ -56,7 +63,8 @@ for pkgdir in "$RUNTIME/@img"/* "$RUNTIME/@koromix"/* "$RUNTIME"/node-*; do
   case "$name" in
     *-win32-x64*|*-darwin-arm64*|*-darwin-x64*|*-linux-x64*)
       if [[ "$name" != *"$KEEP"* ]]; then
-        sz=$(du -sk "$pkgdir" 2>/dev/null | cut -f1 || echo 0)
+        sz=$(du -sk "$pkgdir" 2>/dev/null | cut -f1 || true)
+        sz=${sz:-0}
         rm -rf "$pkgdir"
         pruned_bytes=$((pruned_bytes + sz))
         echo "[prune-runtime] 删除平台包 $name ($((sz/1024))MB)"
