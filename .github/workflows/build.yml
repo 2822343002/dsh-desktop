@@ -44,6 +44,10 @@ jobs:
         working-directory: dsh-desktop
         run: npm install --no-audit --no-fund
 
+      - name: 冒烟测试（node --test）
+        working-directory: dsh-desktop
+        run: node --test "test/*.test.js"
+
       - name: 构建产物
         working-directory: dsh-desktop
         run: npx electron-builder ${{ matrix.target }}

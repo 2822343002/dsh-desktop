@@ -22,10 +22,10 @@ const { app, BrowserWindow, dialog } = require('electron')
 const { spawn } = require('node:child_process')
 const path = require('node:path')
 const fs = require('node:fs')
-const net = require('node:net')
+const { findFreePort, waitForPort } = require('./lib/net-utils')
+const { resolveRuntimePaths } = require('./lib/runtime')
 
 const DSH_PORT_DEFAULT = 3080
-const DSH_PORT_MAX_TRY = 20
 const DSH_WAIT_TIMEOUT_MS = 90 * 1000
 
 // —— 文件日志：GUI 程序 stdout 不可见，写入 userData/dsh-desktop.log ——
@@ -40,84 +40,15 @@ function log(...args) {
   console.log(line)
 }
 
-/** 探测空闲端口（从 base 起逐个尝试） */
-function findFreePort(base) {
-  return new Promise((resolve, reject) => {
-    const tryPort = (port) => {
-      if (port > base + DSH_PORT_MAX_TRY) {
-        reject(new Error('没有可用的空闲端口'))
-        return
-      }
-      const srv = net.createServer()
-      srv.once('error', () => tryPort(port + 1))
-      srv.once('listening', () => {
-        srv.close(() => resolve(port))
-      })
-      srv.listen(port, '127.0.0.1')
-    }
-    tryPort(base)
-  })
-}
-
-/** 等待指定端口被占用（即服务已监听） */
-function waitForPort(port, timeoutMs) {
-  return new Promise((resolve, reject) => {
-    const deadline = Date.now() + timeoutMs
-    const probe = () => {
-      const srv = net.createServer()
-      srv.once('error', () => {
-        // 端口已被占用 → 服务已就绪
-        resolve()
-      })
-      srv.once('listening', () => {
-        srv.close(() => {
-          if (Date.now() > deadline) reject(new Error('等待 dsh 服务启动超时'))
-          else setTimeout(probe, 300)
-        })
-      })
-      srv.listen(port, '127.0.0.1')
-    }
-    probe()
-  })
-}
-
 /** 定位 node 可执行文件与 dsh bin（区分开发/打包模式） */
 function resolveRuntime() {
-  if (app.isPackaged) {
-    const resources = process.resourcesPath
-    const nodeRuntime = path.join(resources, 'node-runtime')
-    const dshRuntime = path.join(resources, 'runtime')
-    const nodeBin =
-      process.platform === 'win32'
-        ? path.join(nodeRuntime, 'node.exe')
-        : path.join(nodeRuntime, 'bin', 'node')
-    const dshBin = path.join(
-      dshRuntime,
-      'node_modules',
-      '@deepseek-ai',
-      'dsh',
-      'lib',
-      'bin.js',
-    )
-    return { nodeBin, dshBin, dshRuntime }
-  }
-  // 开发模式：项目根为 dsh-desktop/ 的上一级
   const projectRoot = path.resolve(__dirname, '..', '..')
-  const nodeRuntime = path.join(projectRoot, '.tools', 'node-v24.19.0-win-x64')
-  const dshRuntime = path.join(projectRoot, 'runtime')
-  const nodeBin =
-    process.platform === 'win32'
-      ? path.join(nodeRuntime, 'node.exe')
-      : path.join(nodeRuntime, 'bin', 'node')
-  const dshBin = path.join(
-    dshRuntime,
-    'node_modules',
-    '@deepseek-ai',
-    'dsh',
-    'lib',
-    'bin.js',
-  )
-  return { nodeBin, dshBin, dshRuntime }
+  return resolveRuntimePaths({
+    isPackaged: app.isPackaged,
+    platform: process.platform,
+    resourcesPath: process.resourcesPath,
+    projectRoot,
+  })
 }
 
 let dshProcess = null
