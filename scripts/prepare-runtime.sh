@@ -23,8 +23,10 @@ case "$TARGET" in
     esac
     ;;
   win)        PLAT="win-x64" ;;
+  mac)        PLAT="mac-arm64" ;;      # CI 别名（macos-14 为 arm64）
   mac-arm64)  PLAT="mac-arm64" ;;
   mac-x64)    PLAT="mac-x64" ;;
+  linux)      PLAT="linux-x64" ;;      # CI 别名
   linux-x64)  PLAT="linux-x64" ;;
   *) echo "未知目标: $TARGET"; exit 1 ;;
 esac

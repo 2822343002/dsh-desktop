@@ -36,8 +36,6 @@ jobs:
 
       - name: 按平台裁剪原生二进制（减小体积，加速解压/安装）
         run: bash scripts/prune-runtime.sh ${{ matrix.platform }}
-        env:
-          PRUNE_DEBUG: "1" # 排障期开启 set -x；修复后移除
 
       - name: 准备内置 Node 运行时（node-runtime/）
         run: bash scripts/prepare-runtime.sh ${{ matrix.platform }}

@@ -25,8 +25,10 @@ case "$TARGET" in
     esac
     ;;
   win)        KEEP="win32-x64" ;;
+  mac)        KEEP="darwin-arm64" ;;   # CI 别名（macos-14 为 arm64）
   mac-arm64)  KEEP="darwin-arm64" ;;
   mac-x64)    KEEP="darwin-x64" ;;
+  linux)      KEEP="linux-x64" ;;      # CI 别名
   linux-x64)  KEEP="linux-x64" ;;
   *) echo "未知目标: $TARGET"; exit 1 ;;
 esac
