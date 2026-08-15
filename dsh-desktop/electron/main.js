@@ -18,15 +18,18 @@
  *    ../.tools/node-v24.19.0-win-x64/  → node
  *    ../runtime/                       → dsh 运行时
  */
-const { app, BrowserWindow, dialog, Tray, Menu } = require('electron')
+const { app, BrowserWindow, dialog, Tray, Menu, ipcMain } = require('electron')
 const { spawn } = require('node:child_process')
 const path = require('node:path')
 const fs = require('node:fs')
+const os = require('node:os')
 const { findFreePort, waitForPort } = require('./lib/net-utils')
 const { resolveRuntimePaths } = require('./lib/runtime')
 
 const DSH_PORT_DEFAULT = 3080
 const DSH_WAIT_TIMEOUT_MS = 90 * 1000
+const WIZARD_DONE_FILE = 'wizard-done.json'
+const WIZARD_CONFIG_FILE = 'wizard-config.json'
 
 // —— 文件日志：GUI 程序 stdout 不可见，写入 userData/dsh-desktop.log ——
 const LOG_FILE = path.join(app.getPath('userData'), 'dsh-desktop.log')
@@ -214,6 +217,59 @@ function createTray() {
   tray.on('click', showMainWindow)
 }
 
+// —— 首次运行引导向导 ——
+function isFirstRun() {
+  const marker = path.join(app.getPath('userData'), WIZARD_DONE_FILE)
+  return !fs.existsSync(marker)
+}
+
+/** 把向导配置落盘：wizard-config.json + DSH_HOME/.credentials.yaml（仅写入 API Key） */
+function persistWizardConfig(payload) {
+  const userData = app.getPath('userData')
+  const configFile = path.join(userData, WIZARD_CONFIG_FILE)
+  fs.writeFileSync(configFile, JSON.stringify(payload, null, 2))
+  fs.writeFileSync(path.join(userData, WIZARD_DONE_FILE), JSON.stringify({ doneAt: Date.now() }))
+  // 写入 dsh 凭据文件（.credentials.yaml，provider 键）
+  if (payload.apiKey) {
+    const dshHome = userData
+    const credFile = path.join(dshHome, '.credentials.yaml')
+    fs.writeFileSync(credFile, `deepseek-official:\n  apiKey: ${payload.apiKey}\n`)
+  }
+  log('[dsh-desktop] 向导配置已保存', configFile)
+}
+
+function registerWizardIpc() {
+  ipcMain.handle('wizard:app-info', () => ({ version: app.getVersion(), name: 'DeepSeek Harness Desktop' }))
+  ipcMain.handle('wizard:select-directory', async () => {
+    const r = await dialog.showOpenDialog({ properties: ['openDirectory'] })
+    return r.canceled || r.filePaths.length === 0 ? null : r.filePaths[0]
+  })
+  ipcMain.handle('wizard:finish', (e, payload) => {
+    persistWizardConfig(payload || {})
+    // 完成向导后加载主界面
+    if (mainWindow) {
+      mainWindow.loadURL(mainWindow.webContents.getURL())
+      showMainWindow()
+    }
+    return true
+  })
+  ipcMain.handle('wizard:skip', () => {
+    persistWizardConfig({ skipped: true })
+    if (mainWindow) showMainWindow()
+    return true
+  })
+}
+
+/** 首次运行时先加载向导页，否则加载 dsh Web UI */
+async function loadInitialSurface(port) {
+  if (isFirstRun()) {
+    registerWizardIpc()
+    await mainWindow.loadFile(path.join(__dirname, 'wizard.html'))
+  } else {
+    await mainWindow.loadURL(`http://127.0.0.1:${port}/`)
+  }
+}
+
 // —— 单实例锁 ——
 const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) {
@@ -232,7 +288,8 @@ if (!gotLock) {
       log('[dsh-desktop] 使用端口', port)
       await startDsh(port)
       await waitForPort(port, DSH_WAIT_TIMEOUT_MS)
-      await createWindow(`http://127.0.0.1:${port}/`)
+      await createWindow()
+      await loadInitialSurface(port)
       createTray()
       // 后台播种 portable 缓存（不阻塞 UI；仅 portable 模式生效）
       seedPortableCache()
