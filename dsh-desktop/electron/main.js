@@ -19,6 +19,7 @@
  *    ../runtime/                       → dsh 运行时
  */
 const { app, BrowserWindow, dialog, Tray, Menu, ipcMain } = require('electron')
+const { autoUpdater } = require('electron-updater')
 const { spawn } = require('node:child_process')
 const path = require('node:path')
 const fs = require('node:fs')
@@ -270,6 +271,67 @@ async function loadInitialSurface(port) {
   }
 }
 
+// —— 自动更新（electron-updater） ——
+let updaterChecked = false
+
+function setupAutoUpdater() {
+  if (!app.isPackaged) {
+    // 开发模式不检查更新
+    return
+  }
+  autoUpdater.autoDownload = false
+  autoUpdater.autoInstallOnAppQuit = true
+  autoUpdater.logger = { info: (...a) => log('[updater]', ...a), warn: (...a) => log('[updater]', ...a), error: (...a) => log('[updater]', ...a) }
+
+  autoUpdater.on('update-available', async (info) => {
+    log('[updater] 发现新版本', info && info.version)
+    try {
+      const r = await dialog.showMessageBox({
+        type: 'info',
+        title: '发现新版本',
+        message: `发现新版本 ${info.version}，是否下载？`,
+        buttons: ['下载', '稍后'],
+        defaultId: 0,
+      })
+      if (r.response === 0) {
+        await autoUpdater.downloadUpdate()
+      }
+    } catch (err) {
+      log('[updater] 下载提示失败:', err && err.message)
+    }
+  })
+
+  autoUpdater.on('update-downloaded', async (info) => {
+    log('[updater] 更新已下载', info && info.version)
+    try {
+      const r = await dialog.showMessageBox({
+        type: 'info',
+        title: '更新就绪',
+        message: `新版本 ${info.version} 已下载，重启应用以完成更新。`,
+        buttons: ['立即重启', '稍后'],
+        defaultId: 0,
+      })
+      if (r.response === 0) {
+        isQuitting = true
+        autoUpdater.quitAndInstall()
+      }
+    } catch (err) {
+      log('[updater] 安装提示失败:', err && err.message)
+    }
+  })
+
+  autoUpdater.on('error', (err) => {
+    log('[updater] 检查更新失败:', err && err.message)
+  })
+
+  // 启动后延迟检查一次
+  setTimeout(() => {
+    if (updaterChecked) return
+    updaterChecked = true
+    autoUpdater.checkForUpdates().catch((err) => log('[updater] check error:', err && err.message))
+  }, 10 * 1000)
+}
+
 // —— 单实例锁 ——
 const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) {
@@ -291,6 +353,7 @@ if (!gotLock) {
       await createWindow()
       await loadInitialSurface(port)
       createTray()
+      setupAutoUpdater()
       // 后台播种 portable 缓存（不阻塞 UI；仅 portable 模式生效）
       seedPortableCache()
     } catch (err) {

@@ -26,6 +26,14 @@
     "productName": "DeepSeek Harness Desktop",
     "copyright": "Copyright © 2026",
     "compression": "normal",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "2822343002",
+        "repo": "dsh-desktop",
+        "releaseType": "release"
+      }
+    ],
     "directories": {
       "output": "dist"
     },
@@ -37,16 +45,23 @@
       {
         "from": "node-runtime",
         "to": "node-runtime",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "../runtime",
         "to": "runtime",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "win": {
-      "target": ["nsis", "portable"],
+      "target": [
+        "nsis",
+        "portable"
+      ],
       "icon": "build/icon.png"
     },
     "portable": {
@@ -58,14 +73,23 @@
       "createDesktopShortcut": true
     },
     "mac": {
-      "target": ["dmg", "zip"],
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "category": "public.app-category.developer-tools",
       "icon": "build/icon.png"
     },
     "linux": {
-      "target": ["AppImage", "deb"],
+      "target": [
+        "AppImage",
+        "deb"
+      ],
       "category": "Development",
       "icon": "build/icon.png"
     }
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
   }
 }
