@@ -53,20 +53,34 @@ case "$PLAT" in
     ;;
 esac
 
-if [ ! -d "$TOOLS/$DIR" ]; then
+if [ ! -d "$TOOLS/$DIR" ] || [ ! -e "$TOOLS/$DIR/$BIN_REL" ]; then
   echo "[prepare-runtime] 下载 $URL"
-  curl -sL --max-time 600 -o "$TOOLS/$FILE" "$URL"
+  curl -fsSL --retry 3 --max-time 600 -o "$TOOLS/$FILE" "$URL" || { echo "[prepare-runtime] 下载失败"; exit 1; }
   mkdir -p "$TOOLS/$DIR"
+  # 解压 zip/tar.gz：依次尝试 tar / unzip / PowerShell（GitHub Windows runner 的 tar 可能不支持 zip）
   case "$FILE" in
     *.zip)
-      (cd "$TOOLS" && (tar -xf "$FILE" 2>/dev/null || powershell -Command "Expand-Archive -Path '$TOOLS/$FILE' -DestinationPath '$TOOLS'" ))
+      if ! (cd "$TOOLS" && tar -xf "$FILE" 2>/dev/null); then
+        if command -v unzip >/dev/null 2>&1; then
+          (cd "$TOOLS" && unzip -o -q "$FILE") || powershell -NoProfile -Command "Expand-Archive -Path '$TOOLS/$FILE' -DestinationPath '$TOOLS'" || { echo "[prepare-runtime] zip 解压失败"; exit 1; }
+        else
+          powershell -NoProfile -Command "Expand-Archive -Path '$TOOLS/$FILE' -DestinationPath '$TOOLS'" || { echo "[prepare-runtime] zip 解压失败"; exit 1; }
+        fi
+      fi
       ;;
     *.tar.gz)
-      tar -xzf "$TOOLS/$FILE" -C "$TOOLS"
+      tar -xzf "$TOOLS/$FILE" -C "$TOOLS" || { echo "[prepare-runtime] tar.gz 解压失败"; exit 1; }
       ;;
   esac
 else
   echo "[prepare-runtime] 已存在 $TOOLS/$DIR，跳过下载"
+fi
+
+# 校验解压产物
+if [ ! -e "$TOOLS/$DIR/$BIN_REL" ]; then
+  echo "[prepare-runtime] 错误：解压后未找到 $TOOLS/$DIR/$BIN_REL"
+  ls "$TOOLS" 2>/dev/null | head -10
+  exit 1
 fi
 
 # —— 复制 node 可执行文件到输出目录（仅可执行文件，控制体积）——

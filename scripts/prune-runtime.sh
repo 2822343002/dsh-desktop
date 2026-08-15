@@ -37,7 +37,7 @@ for d in $NPTY_DIRS; do
     [ -d "$sub" ] || continue
     name=$(basename "$sub")
     if [ "$name" != "$KEEP" ]; then
-      sz=$(du -sk "$sub" 2>/dev/null | cut -f1)
+      sz=$(du -sk "$sub" 2>/dev/null | cut -f1 || echo 0)
       rm -rf "$sub"
       pruned_bytes=$((pruned_bytes + sz))
       echo "  删除 $name ($((sz/1024))MB)"
@@ -56,7 +56,7 @@ for pkgdir in "$RUNTIME/@img"/* "$RUNTIME/@koromix"/* "$RUNTIME"/node-*; do
   case "$name" in
     *-win32-x64*|*-darwin-arm64*|*-darwin-x64*|*-linux-x64*)
       if [[ "$name" != *"$KEEP"* ]]; then
-        sz=$(du -sk "$pkgdir" 2>/dev/null | cut -f1)
+        sz=$(du -sk "$pkgdir" 2>/dev/null | cut -f1 || echo 0)
         rm -rf "$pkgdir"
         pruned_bytes=$((pruned_bytes + sz))
         echo "[prune-runtime] 删除平台包 $name ($((sz/1024))MB)"
