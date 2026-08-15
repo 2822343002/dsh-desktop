@@ -1,0 +1,60 @@
+name: build-dsh-desktop
+
+# 三平台打包矩阵：Windows/Linux 的 AppImage/deb 无法在 Windows 主机交叉构建，
+# macOS dmg 必须在 macOS 上构建，故交由各平台原生 runner 构建。
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win
+            target: "--win --x64"
+          - os: ubuntu-latest
+            platform: linux
+            target: "--linux --x64"
+          - os: macos-14
+            platform: mac
+            target: "--mac --universal"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: 安装 dsh 运行时（runtime/node_modules）
+        working-directory: runtime
+        run: npm install --omit=dev --no-audit --no-fund
+
+      - name: 准备内置 Node 运行时（node-runtime/）
+        run: bash scripts/prepare-runtime.sh ${{ matrix.platform }}
+
+      - name: 安装 Electron 构建依赖
+        working-directory: dsh-desktop
+        run: npm install --no-audit --no-fund
+
+      - name: 构建产物
+        working-directory: dsh-desktop
+        run: npx electron-builder ${{ matrix.target }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false" # 无签名证书时跳过签名
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsh-desktop-${{ matrix.platform }}
+          path: |
+            dsh-desktop/dist/*.exe
+            dsh-desktop/dist/*.AppImage
+            dsh-desktop/dist/*.deb
+            dsh-desktop/dist/*.dmg
+            dsh-desktop/dist/*.zip
+          if-no-files-found: warn
