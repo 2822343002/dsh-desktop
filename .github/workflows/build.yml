@@ -21,7 +21,7 @@ jobs:
             target: "--linux --x64"
           - os: macos-14
             platform: mac
-            target: "--mac --universal"
+            target: "--mac --arm64" # 内置 node-runtime 为 arm64；x64 版待后续补充
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
