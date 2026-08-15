@@ -54,7 +54,7 @@ jobs:
 
       - name: 构建产物（有签名证书时自动签名）
         working-directory: dsh-desktop
-        run: npx electron-builder ${{ matrix.target }}
+        run: npx electron-builder ${{ matrix.target }} --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false" # 无证书时跳过签名
           # —— 代码签名证书（由仓库 Secrets 提供，未配置时构建跳过签名） ——
