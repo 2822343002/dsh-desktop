@@ -3,7 +3,11 @@
   "version": "0.1.1",
   "description": "DeepSeek Harness 桌面端 — 在空白电脑上一键运行的 dsh 封装",
   "main": "electron/main.js",
-  "author": "dsh-desktop",
+  "author": {
+    "name": "dsh-desktop contributors",
+    "email": "2822343002@users.noreply.github.com"
+  },
+  "homepage": "https://github.com/2822343002/dsh-desktop",
   "license": "MIT",
   "scripts": {
     "start": "electron .",
