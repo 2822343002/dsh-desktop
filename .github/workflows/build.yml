@@ -48,11 +48,22 @@ jobs:
         working-directory: dsh-desktop
         run: node --test "test/*.test.js"
 
-      - name: 构建产物
+      - name: 替换 portable NSIS 模板（二次启动缓存加速）
+        if: matrix.platform == 'win'
+        run: bash scripts/patch-portable-nsi.sh
+
+      - name: 构建产物（有签名证书时自动签名）
         working-directory: dsh-desktop
         run: npx electron-builder ${{ matrix.target }}
         env:
-          CSC_IDENTITY_AUTO_DISCOVERY: "false" # 无签名证书时跳过签名
+          CSC_IDENTITY_AUTO_DISCOVERY: "false" # 无证书时跳过签名
+          # —— 代码签名证书（由仓库 Secrets 提供，未配置时构建跳过签名） ——
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          # —— macOS notarization（仅 mac 构建使用） ——
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
       - name: 上传产物
         uses: actions/upload-artifact@v4
