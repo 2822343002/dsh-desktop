@@ -47,12 +47,12 @@ plugins/
 
 | 包 | 能力 | 状态 |
 |---|---|---|
-| `@dsh-desktop/tool-notify` | 系统通知（长任务完成提醒） | 计划 |
-| `@dsh-desktop/tool-clipboard` | 读写系统剪贴板 | 计划 |
-| `@dsh-desktop/hooks-desk` | 危险命令门禁 | 计划 |
-| `@dsh-desktop/tool-screenshot` | 截屏/区域截图 | 计划 |
-| `@dsh-desktop/tool-rag-local` | 本地文档向量检索 | 计划 |
-| `@dsh-desktop/tool-ocr` | 图片文字识别 | 计划 |
+| `@dsh-desktop/tool-notify` | 系统通知（长任务完成提醒） | ✅ 已交付 v0.1.0 |
+| `@dsh-desktop/tool-clipboard` | 读写系统剪贴板 | ✅ 已交付 v0.1.0 |
+| `@dsh-desktop/hooks-desk` | 危险命令门禁 | ✅ 已交付 v0.1.0 |
+| `@dsh-desktop/tool-screenshot` | 截屏/区域截图 → 图片附件（视觉模型可见） | ✅ 已交付 v0.1.0 |
+| `@dsh-desktop/tool-ocr` | 图片文字识别（Tesseract.js 本地） | ✅ 已交付 v0.1.0 |
+| `@dsh-desktop/tool-rag-local` | 本地文档向量化 + 语义检索 | ✅ 已交付 v0.1.0 |
 | `@dsh-desktop/cost-guard` | token 预算/降级 | 计划 |
 | `@dsh-desktop/plan-review` | 计划模式强制评审 | 计划 |
 | `@dsh-desktop/llm-ollama` | 本地 Ollama 适配器 | 计划 |

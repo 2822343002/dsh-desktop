@@ -60,11 +60,11 @@
 > 主壳零侵入；插件组合可封装为 profile（bundle）分发。
 
 ### 4.1 工具类插件（`ctx.tools.register`）
-- [ ] `@dsh-desktop/tool-notify`：系统通知（长任务完成提醒）
-- [ ] `@dsh-desktop/tool-clipboard`：读写系统剪贴板
-- [ ] `@dsh-desktop/tool-screenshot`：截屏/区域截图 → 视觉模型输入
-- [ ] `@dsh-desktop/tool-rag-local`：本地目录文档向量化 + 检索
-- [ ] `@dsh-desktop/tool-ocr`：图片文字识别（Tesseract）
+- [x] `@dsh-desktop/tool-notify`：系统通知（长任务完成提醒）— v0.1.0 已交付
+- [x] `@dsh-desktop/tool-clipboard`：读写系统剪贴板 — v0.1.0 已交付
+- [x] `@dsh-desktop/tool-screenshot`：截屏/区域截图 → 图片附件（视觉模型可见）— v0.1.0 已交付
+- [x] `@dsh-desktop/tool-rag-local`：本地目录文档向量化 + 检索 — v0.1.0 已交付
+- [x] `@dsh-desktop/tool-ocr`：图片文字识别（Tesseract.js）— v0.1.0 已交付
 
 ### 4.2 钩子/策略插件（事件扩展点）
 - [ ] `@dsh-desktop/hooks-desk`：危险命令门禁（删库/清盘/curl 外传拦截）`tools/pre-execute`

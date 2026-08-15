@@ -10,6 +10,19 @@
 - [ ] 系统托盘、开机自启
 - [ ] 代码签名（Windows Authenticode / macOS notarization）
 
+## [0.1.2] - 2026-08-16
+
+### 新增（重插件）
+
+- `@dsh-desktop/tool-ocr` v0.1.0：本地 OCR（Tesseract.js 7），`ocr_image` 识别截图/扫描件文字，支持中英文与离线 tessdata
+- `@dsh-desktop/tool-screenshot` v0.1.0：`take_screenshot` 全屏/区域截屏，图片经 `ctx.attachments` 注册为附件供视觉模型可见（win/mac/linux）
+- `@dsh-desktop/tool-rag-local` v0.1.0：`rag_index` / `rag_search` 本地文档语义检索（`@xenova/transformers` 本地 embedding + sqlite-vec，自动降级 JSON 存储）
+
+### 说明
+
+- 三个插件均为独立 `@dsh-desktop/*` npm 包，独立版本与 CHANGELOG，经 cordis.yml patch 挂载
+- 每个插件含 node --test 冒烟测试（tool-ocr 5 项 / tool-screenshot 7 项 / tool-rag-local 11 项含端到端）
+
 ## [0.1.1] - 2026-08-15
 
 ### 新增
