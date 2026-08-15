@@ -1,0 +1,99 @@
+# 插件开发指南（dsh-desktop）
+
+面向 dsh 插件体系的开发文档：扩展点、挂载、打包与发布。
+前置阅读：[Cordis primer](../docs/cordis-tutorial/index.md)（dsh 官方）与 [ROADMAP.md](./ROADMAP.md#七模块化开发约定)。
+
+## 1. 插件是什么
+
+插件是导出 `apply(ctx)` 的 TypeScript/JavaScript 模块。框架加载时调用 `apply`，
+传入 `ctx` 上下文；通过 `ctx` 注册的一切（事件监听、工具、定时器）在插件卸载时自动回收。
+
+```ts
+import type { Context } from '@deepseek-ai/cordis'
+
+export const name = 'my-plugin'
+export const inject = ['tools']   // 声明依赖的服务，就绪后才加载
+
+export function apply(ctx: Context) {
+  // 注册能力...
+}
+```
+
+## 2. 常用扩展点（能力 → 机制）
+
+| 想做什么 | 机制 |
+|---|---|
+| 添加面向模型的工具 | `ctx.tools.register()`（schema 自动流入提示词组装） |
+| 拦截/审批工具调用 | `tools/pre-execute` 事件（waterfall，返回 allow/deny/ask） |
+| 包装执行（超时/重试/指标） | `tools/execute` 事件 |
+| 变换结果/附加上下文 | `tools/post-execute` 事件 |
+| 观察最终结果（审计） | `tools/result` 事件 |
+| 添加模型提供方 | `ctx.llm` 注册 `LlmAdapter`（`registerAdapter`） |
+| 持久会话状态扩展 | 扩展 `SessionEventMap` 并渲染 |
+| 系统提示词片段 | `ctx.systemPrompt.section()` |
+| 后台任务 | `ctx.jobs.start()` + `job_*` 工具 |
+| 用户命令（无需模型轮次） | `ctx.commands` |
+| 文件系统策略 | `ctx.fs` 提供方或 `fs/*` 事件 |
+| 定时任务 | `cordis-plugin-timer` + 调度工具 |
+| 生命周期钩子 | `agent/pre-step`、`agent/request`、`agent/turn-stopping` 等 |
+
+## 3. 工具定义（`defineTool`）
+
+```ts
+import { defineTool } from '@deepseek-ai/dsh-tools'
+
+ctx.tools.register(defineTool({
+  name: 'my_tool',
+  description: '说明模型能看到什么',
+  parameters: {
+    foo: { type: 'string', required: true, description: '参数说明' },
+  },
+  output: {
+    schema: { type: 'string' },
+    render: (_args, value) => [{ type: 'text', text: value }],
+  },
+  async execute(args, exec) {
+    // args 已按 schema 校验；exec.signal 用于取消
+    return 'result'
+  },
+}))
+```
+
+## 4. 钩子示例（权限门禁）
+
+```ts
+import type { Context } from '@deepseek-ai/cordis'
+import type { PreToolDecision, ToolExecution } from '@deepseek-ai/dsh-tools'
+
+export const name = 'permission-gate'
+export function apply(ctx: Context) {
+  ctx.on('tools/pre-execute', async (exec, next): Promise<PreToolDecision> => {
+    if (!isAllowed(exec)) return { kind: 'deny', reason: 'Denied by policy.' }
+    return next()
+  })
+}
+```
+
+## 5. 挂载（cordis.yml patch）
+
+```yaml
+- insert:
+    - id: my-plugin
+      name: '/absolute/path/to/plugins/my-plugin/src/index.ts'
+```
+
+patch 文件只贡献配置；插件路径必须绝对（或已安装为包）。层叠顺序：profile bundles →
+profile `cordis.patch.yml` → home `cordis.patch.yml` → `--patch` overlay，后者覆盖前者。
+
+## 6. 打包与发布
+
+1. 每个插件独立 `package.json`（`@dsh-desktop/<name>`），TS 源码经 `tsc` 编译到 `lib/`。
+2. 插件随主应用打进 `resources/runtime`：`runtime/node_modules/@dsh-desktop/<name>`。
+3. 发布到 npm registry（或私有 registry）后，可在任何层用包名挂载。
+4. 插件必须带 README + CHANGELOG，README 含挂载示例。
+
+## 7. 测试
+
+- 每个插件至少一个冒烟测试（`node --test`，见 `plugins/<name>/test/`）。
+- 工具插件可断言：注册成功、schema 正确、`execute` 返回规范值。
+- 钩子插件可断言：拦截路径返回 `deny`、放行路径调用 `next()`。

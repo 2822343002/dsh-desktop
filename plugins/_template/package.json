@@ -1,0 +1,22 @@
+{
+  "name": "@dsh-desktop/template",
+  "version": "0.0.0",
+  "description": "dsh-desktop plugin template - copy and rename for a new plugin",
+  "private": true,
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-tools": "^0.0.1-rc.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  }
+}
