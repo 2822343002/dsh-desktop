@@ -54,6 +54,7 @@ jobs:
 
       - name: 构建产物（有签名证书时自动签名）
         working-directory: dsh-desktop
+        shell: bash # Windows runner 默认 PowerShell，需显式 bash 解析 shell 语法
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false" # 无证书时跳过签名
           # secrets 未配置时展开为空字符串；shell 内非空才保留（否则 unset）
