@@ -114,6 +114,7 @@ dsh-desktop/
 ## ⚠️ 已知限制
 
 - 产物未做代码签名，Windows SmartScreen 可能提示"未知发布者"，选择"仍要运行"即可。
+- **体积与启动速度**：产物约 161MB（Electron + Node + dsh 依赖树），属自包含方案固有成本。打包前运行 `scripts/prune-runtime.sh` 按平台裁剪原生二进制（如 node-pty 跨平台 prebuilds），可进一步缩小体积、缩短 portable 自解压与安装耗时。已验证：win-unpacked 版启动至 UI 就绪约 3.7s；portable 版含 NSIS 自解压环节，首次运行期间界面无反馈属正常（需耐心等待，勿重复双击）。
 - dsh 处于 Developer Preview（当前锁定 `0.1.0-rc.6`），核心插件与 API 持续迭代，升级见[升级指南](./docs/DEVELOPMENT.md)。
 - Windows 使用官方 pwsh 后端，POSIX 特有工具（如 tmux）不可用。
 

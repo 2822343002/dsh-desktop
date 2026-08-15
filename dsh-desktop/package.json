@@ -20,6 +20,7 @@
     "appId": "com.dsh.desktop",
     "productName": "DeepSeek Harness Desktop",
     "copyright": "Copyright © 2026",
+    "compression": "normal",
     "directories": {
       "output": "dist"
     },

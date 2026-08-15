@@ -10,6 +10,14 @@
 - [ ] 系统托盘、开机自启
 - [ ] 代码签名（Windows Authenticode / macOS notarization）
 
+## [0.1.1] - 2026-08-15
+
+### 优化
+
+- 新增 `scripts/prune-runtime.sh`：打包前按目标平台裁剪原生二进制（node-pty 跨平台 prebuilds 等），Windows 产物由约 173MB 降至 161MB，缩短 portable 自解压与安装耗时
+- CI workflow 增加裁剪步骤，三平台产物均受益
+- 验证：win-unpacked 版启动至 UI 就绪约 3.7s；裁剪后引擎与打包应用端到端正常（HTTP 200）
+
 ## [0.1.0] - 2026-08-15
 
 ### 新增
