@@ -44,6 +44,9 @@
       "target": ["nsis", "portable"],
       "icon": "build/icon.png"
     },
+    "portable": {
+      "splashImage": "build/splash.bmp"
+    },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,

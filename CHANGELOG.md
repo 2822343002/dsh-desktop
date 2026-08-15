@@ -12,6 +12,10 @@
 
 ## [0.1.1] - 2026-08-15
 
+### 新增
+
+- 便携版启动提示画面：双击后立即显示"正在启动" splash 图（NSIS `portable.splashImage`），自解压期间有反馈，消除"双击无反应"的观感
+
 ### 优化
 
 - 新增 `scripts/prune-runtime.sh`：打包前按目标平台裁剪原生二进制（node-pty 跨平台 prebuilds 等），Windows 产物由约 173MB 降至 161MB，缩短 portable 自解压与安装耗时
