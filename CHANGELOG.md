@@ -4,24 +4,33 @@
 
 ## [Unreleased]
 
-- [ ] 三平台 CI 构建与自动发布（`v*` tag 触发）
 - [ ] 应用内一键升级 dsh 版本
-- [ ] 首次运行引导页（工作区 + API Key 向导）
-- [ ] 系统托盘、开机自启
 - [ ] 代码签名（Windows Authenticode / macOS notarization）
 
-## [0.1.2] - 2026-08-16
+## [0.2.0] - 2026-08-16
 
-### 新增（重插件）
+### 主壳新增
 
-- `@dsh-desktop/tool-ocr` v0.1.0：本地 OCR（Tesseract.js 7），`ocr_image` 识别截图/扫描件文字，支持中英文与离线 tessdata
-- `@dsh-desktop/tool-screenshot` v0.1.0：`take_screenshot` 全屏/区域截屏，图片经 `ctx.attachments` 注册为附件供视觉模型可见（win/mac/linux）
-- `@dsh-desktop/tool-rag-local` v0.1.0：`rag_index` / `rag_search` 本地文档语义检索（`@xenova/transformers` 本地 embedding + sqlite-vec，自动降级 JSON 存储）
+- 系统托盘：最小化到托盘、托盘菜单（打开/退出）、窗口关闭常驻后台
+- 首次运行引导向导：欢迎 → 工作区 → API Key → preset 四步本地向导，配置落盘（`.credentials.yaml` / `wizard-config.json`）
+- 自动更新：electron-updater 接入，GitHub release feed（`latest.yml`），启动延迟检查 + 下载/重启提示
+- portable 二次启动缓存：自定义 NSIS 模板 + 应用播种 `%LOCALAPPDATA%\dsh-desktop-cache`，命中后跳过自解压，版本失效自动重建
+- 可测性重构：抽出 `lib/net-utils.js` / `lib/runtime.js`，7 项 `node --test` 冒烟测试 + CI 测试步骤
+- CI 三平台构建修复：linux/mac 的 prune 短名参数、homepage/author 元数据、mac 单架构 arm64，三平台全绿
+
+### 插件（独立 `@dsh-desktop/*` 包，cordis.yml patch 挂载）
+
+- `@dsh-desktop/tool-notify` v0.1.0：系统通知（win/mac/linux），防注入
+- `@dsh-desktop/tool-clipboard` v0.1.0：剪贴板读写（stdin 传递防注入）
+- `@dsh-desktop/hooks-desk` v0.1.0：危险命令门禁（删库/格式化/关机/外传拦截）
+- `@dsh-desktop/tool-screenshot` v0.1.0：全屏/区域截屏 → 图片附件（视觉模型可见）
+- `@dsh-desktop/tool-ocr` v0.1.0：本地 OCR（Tesseract.js 7），中英文 + 离线 tessdata
+- `@dsh-desktop/tool-rag-local` v0.1.0：本地文档语义检索（本地 embedding + sqlite-vec，降级 JSON）
 
 ### 说明
 
-- 三个插件均为独立 `@dsh-desktop/*` npm 包，独立版本与 CHANGELOG，经 cordis.yml patch 挂载
-- 每个插件含 node --test 冒烟测试（tool-ocr 5 项 / tool-screenshot 7 项 / tool-rag-local 11 项含端到端）
+- 三平台产物：Windows（portable + Setup）、Linux（AppImage + deb）、macOS（dmg，arm64）由 CI 构建
+- 代码签名仍为已知限制（CI secrets 已接线，配置证书后自动签名）
 
 ## [0.1.1] - 2026-08-15
 
