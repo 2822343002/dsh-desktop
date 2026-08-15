@@ -18,7 +18,7 @@
  *    ../.tools/node-v24.19.0-win-x64/  → node
  *    ../runtime/                       → dsh 运行时
  */
-const { app, BrowserWindow, dialog } = require('electron')
+const { app, BrowserWindow, dialog, Tray, Menu } = require('electron')
 const { spawn } = require('node:child_process')
 const path = require('node:path')
 const fs = require('node:fs')
@@ -53,6 +53,67 @@ function resolveRuntime() {
 
 let dshProcess = null
 let mainWindow = null
+
+/** portable 二次启动缓存目录名（与 build/portable.nsi 中一致） */
+const CACHE_DIR_NAME = 'dsh-desktop-cache'
+const CACHE_VERSION_FILE = 'cache-version.txt'
+const CACHE_REBUILD_FLAG = 'rebuild.flag'
+
+/**
+ * portable 缓存播种/校验：与自定义 NSIS 模板（build/portable.nsi）配合。
+ * - 命中：缓存 exe 存在且版本一致 → 直接复用，跳过 7z 自解压。
+ * - 版本不匹配且当前运行在临时解压目录 → 删除旧缓存并重建为新版本。
+ * - 异常状态（运行在旧缓存内）→ 写入 rebuild.flag，通知 NSIS 下次走解压流程。
+ */
+async function seedPortableCache() {
+  try {
+    // 仅 portable 模式（NSIS 设置该环境变量）才需要
+    if (!process.env.PORTABLE_EXECUTABLE_FILE) return false
+    const cacheRoot = path.join(app.getPath('appData'), CACHE_DIR_NAME)
+    const cacheExe = path.join(cacheRoot, 'DeepSeek Harness Desktop.exe')
+    const versionFile = path.join(cacheRoot, CACHE_VERSION_FILE)
+    const rebuildFlag = path.join(cacheRoot, CACHE_REBUILD_FLAG)
+    const srcDir = path.dirname(process.execPath)
+
+    if (fs.existsSync(cacheExe)) {
+      const cachedVersion = fs.existsSync(versionFile)
+        ? fs.readFileSync(versionFile, 'utf8').trim()
+        : ''
+      if (cachedVersion === app.getVersion() && !fs.existsSync(rebuildFlag)) {
+        log('[dsh-desktop] portable 缓存命中，跳过自解压')
+        return true
+      }
+      // 版本不匹配：仅当运行在临时解压目录（非缓存自身）时才能重建
+      if (path.resolve(srcDir) !== path.resolve(cacheRoot)) {
+        log('[dsh-desktop] portable 缓存版本不匹配，重建:', cachedVersion, '->', app.getVersion())
+        fs.rmSync(cacheRoot, { recursive: true, force: true })
+        fs.mkdirSync(cacheRoot, { recursive: true })
+        await fs.promises.cp(srcDir, cacheRoot, { recursive: true })
+        fs.writeFileSync(versionFile, app.getVersion())
+        log('[dsh-desktop] portable 缓存已重建:', cacheRoot)
+        return true
+      }
+      // 运行在旧缓存内且版本不匹配（异常）：标记重建，下次走解压流程
+      try {
+        fs.writeFileSync(rebuildFlag, 'rebuild')
+        log('[dsh-desktop] portable 缓存标记重建（运行中无法自删）')
+      } catch (_) {
+        /* ignore */
+      }
+      return false
+    }
+
+    // 无缓存：首次播种
+    fs.mkdirSync(cacheRoot, { recursive: true })
+    await fs.promises.cp(srcDir, cacheRoot, { recursive: true })
+    fs.writeFileSync(versionFile, app.getVersion())
+    log('[dsh-desktop] portable 缓存已播种:', cacheRoot)
+    return true
+  } catch (err) {
+    log('[dsh-desktop] 缓存播种失败:', err && err.message)
+    return false
+  }
+}
 
 /** 启动 dsh web 服务器 */
 async function startDsh(port) {
@@ -109,10 +170,48 @@ async function createWindow(url) {
       nodeIntegration: false,
     },
   })
+  mainWindow.on('close', (e) => {
+    // 非退出时关闭窗口 → 隐藏到托盘（dsh 后台继续运行）
+    if (!isQuitting) {
+      e.preventDefault()
+      mainWindow.hide()
+    }
+  })
   mainWindow.on('closed', () => {
     mainWindow = null
   })
   await mainWindow.loadURL(url)
+}
+
+// —— 系统托盘：最小化到托盘、托盘菜单（打开/退出） ——
+let tray = null
+let isQuitting = false
+
+function showMainWindow() {
+  if (!mainWindow) return
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow.focus()
+}
+
+function createTray() {
+  const icon = path.join(__dirname, '..', 'build', 'icon.png')
+  tray = new Tray(icon)
+  tray.setToolTip('DeepSeek Harness Desktop')
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: '打开主界面', click: showMainWindow },
+      { type: 'separator' },
+      {
+        label: '退出',
+        click: () => {
+          isQuitting = true
+          app.quit()
+        },
+      },
+    ]),
+  )
+  tray.on('click', showMainWindow)
 }
 
 // —— 单实例锁 ——
@@ -134,6 +233,9 @@ if (!gotLock) {
       await startDsh(port)
       await waitForPort(port, DSH_WAIT_TIMEOUT_MS)
       await createWindow(`http://127.0.0.1:${port}/`)
+      createTray()
+      // 后台播种 portable 缓存（不阻塞 UI；仅 portable 模式生效）
+      seedPortableCache()
     } catch (err) {
       log('[dsh-desktop] 启动失败：', err)
       dialog.showErrorBox('启动失败', String((err && err.message) || err))
@@ -141,8 +243,9 @@ if (!gotLock) {
     }
   })
 
+  // 关闭窗口 → 隐藏到托盘常驻，不退出应用（dsh 后台继续运行）
   app.on('window-all-closed', () => {
-    app.quit()
+    /* 常驻托盘；退出走托盘菜单或系统退出 */
   })
 
   app.on('before-quit', () => {
