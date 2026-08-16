@@ -73,6 +73,32 @@ body::after {
 [class*='card']:active, [class*='panel']:active, [class*='surface']:active, [class*='message']:active {
   transform: scale(0.98) !important;
 }
+/* —— 布局/侧边栏/主区/输入区：玻璃化（web UI 全面可见） —— */
+[class*='sidebar'], [class*='layout'], [class*='main'], [class*='container'], [class*='composer'] {
+  background: rgba(255, 255, 255, 0.03) !important;
+  backdrop-filter: blur(14px) saturate(1.2) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(1.2) !important;
+  border-right: 1px solid var(--glass-border) !important;
+}
+[class*='sidebar']:not([class*='item']), [class*='composer'] {
+  border: 1px solid var(--glass-border) !important;
+  border-top-color: var(--glass-border-highlight) !important;
+}
+/* 输入框 / 编辑器 */
+textarea, input[type='text'], input:not([type]), [contenteditable='true'], [class*='editor'], [class*='input'] {
+  background: rgba(255, 255, 255, 0.06) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: 10px !important;
+  color: var(--text-primary) !important;
+}
+/* 覆盖 dsh 主题变量：边框/标签色改为玻璃风（原生生效） */
+:root {
+  --dsw-alias-border-l1: rgba(255, 255, 255, 0.14) !important;
+  --dsw-alias-border-l2: rgba(255, 255, 255, 0.20) !important;
+  --dsw-alias-border-l2-darkmode-thin: rgba(255, 255, 255, 0.18) !important;
+}
 /* 文字层级 */
 body, [class*='text'] { color: rgba(255, 255, 255, 0.94) !important; }
 [class*='secondary'], [class*='muted'], [class*='hint'] { color: rgba(255, 255, 255, 0.62) !important; }
