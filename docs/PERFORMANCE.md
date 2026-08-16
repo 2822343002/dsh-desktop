@@ -1,101 +1,119 @@
-# dsh-desktop 体积与自解压速度优化方案
+# dsh-desktop 体积与自解压速度优化方案（修订版 v2）
 
-> 问题：portable 版自解压耗时近 10 分钟，安装版同样偏慢。
-> 根因：**包体过大**（v0.2.0 portable 236MB）+ **NSIS 默认 LZMA2 解压慢**。
-> 本文档给出「降体积 + 增解压速度」的完整方案（含收益预估、风险、实施步骤）。
+> 修订日期：2026-08-16 · 依据：v0.2.0 实测 + 后续修复后重新打包（157MB）实测。
+> 本文档是 v1（PERFORMANCE.md 初稿）的**审查修订版**：修正过时基线、指出前提错误、重排优先级。
 
 ---
 
-## 一、体积构成分析（实测，v0.2.0）
+## 〇、审查结论速览（先看这里）
 
-| 项 | 体积 | 说明 |
+| # | 结论 |
+|---|---|
+| 1 | **原方案体积基线已过时**：v0.2.0 最初 236MB，修复后重新打包**当前 157MB** |
+| 2 | **重大前提错误**：当前产物中 **6 个插件未打进 runtime**（`@dsh-desktop` 目录为空）——157MB 的"缩小"不是优化成果，而是插件丢失的结果 |
+| 3 | 插件丢失根因：koffi 补装时在 `runtime/` 执行 `npm install`，重建 node_modules **清掉了手动拷贝的插件**（未受 package.json 管理） |
+| 4 | **B1（useZip）是当前最有效的单一动作，且尚未启用**——应立即实施 |
+| 5 | A1–A3（插件裁剪）前提需修正：仅当插件**重新正确进包**后才有意义 |
+
+---
+
+## 一、当前现状基线（2026-08-16 实测）
+
+| 项 | 实测值 | 说明 |
 |---|---|---|
-| `runtime/node_modules/@dsh-desktop`（6 个插件） | **451MB** | 插件本体 + 各自完整 node_modules |
-| 其中 `tool-rag-local` | 261MB | onnxruntime-node 92M + onnxruntime-web 66M + @xenova 45M + typescript 23M + protobufjs 19M |
-| 其中 `tool-ocr` | 78MB | tesseract.js-core 44M + typescript 23M + zlibjs 3.7M |
-| 其余 4 个轻插件 | 各 29MB | 每个都含 **typescript 23M**（devDependency 被打包！） |
-| runtime 顶层其余（dsh 本体等） | ~312M | @aws-sdk 66M、@deepseek-ai 33M 等（dsh 固有） |
-| **可裁剪总量** | **~200M+** | 见下方方案 A |
+| portable exe | **157.1MB** | `dist/DeepSeek Harness Desktop 0.2.0.exe` |
+| Setup exe | **157.3MB** | `dist/... Setup 0.2.0.exe` |
+| runtime/node_modules | 312M | dsh 本体 + 补装的 koffi/sharp |
+| `runtime/node_modules/@dsh-desktop` | **空（4KB）** | ⚠️ 6 个插件未进包 |
+| `@koromix/koffi-win32-x64` | 1.1M | 已补装（闪退修复） |
+| `@img/sharp-win32-x64` | 19M | 已补装 |
+| 插件源码（plugins/） | 6 个完好 | tool-* + hooks-desk |
+| useZip 配置 | **未启用** | `portable` 仅 `splashImage` |
+| 解压耗时（用户反馈） | ~10min（236MB 时代） | 157MB 未单独实测 |
 
-## 二、降体积方案（A）
+### 关键问题：插件为什么丢失？
+- 时间线：v0.2.0 打包前手工 `cp -r plugins/* runtime/node_modules/@dsh-desktop/` → 打包 236MB（含插件）。
+- 之后闪退修复在 `runtime/` 执行 `npm install @koromix/koffi-win32-x64 @img/sharp-win32-x64`——npm 重建 node_modules，**删除未声明的手动插件目录**。
+- 后续重新打包（157MB）即不含插件；当前 Release 与本地产物都缺 6 个插件。
 
-### A1. 打包时剔除插件 devDependencies（收益最大，约 -138MB）
-- 现状：`plugins/*` 的 `npm install` 装了 `typescript`、`@types/node` 等 devDependencies，
-  拷贝进 runtime 时被一并打包（每插件 23M × 6 ≈ 138M）。
-- 方案：拷入 runtime 前执行**生产依赖裁剪**：
-  ```bash
-  # 在 runtime/node_modules/@dsh-desktop/<pkg> 内移除 devDependencies
-  node -e "const p=require('./package.json');
-    const d=Object.keys(p.devDependencies||{});
-    for (const m of d) require('fs').rmSync('node_modules/'+m,{recursive:true,force:true})"
-  # 同时清理 @types/* 与 .d.ts 之外的无用产物
-  ```
-- 预期：**-138MB**（typescript/@types 全部移除）。
+---
+
+## 二、降体积方案（A）—— 修订后
+
+> ⚠️ 前提修正：以下裁剪**仅在插件重新进包后**生效。**第一步必须是修复插件进包流程**（见四）。
+
+### A0.（新增，先做）修复插件进包流程
+- 问题：手动拷贝 + npm install 会互相破坏。
+- 方案：**拷入 runtime 与 npm install 分离，且插件作为受管依赖**：
+  1. 在 `runtime/package.json` 声明插件为本地依赖（`"@dsh-desktop/tool-notify": "file:../plugins/tool-notify"` 等），使 npm 持久管理；
+  2. 或拷贝后**不再在 runtime 执行 npm install**（需要补装的原生包改在拷入前完成）。
+- 验收：`runtime/node_modules/@dsh-desktop/` 含 6 个插件且重打包后仍在。
+
+### A1. 剔除插件 devDependencies（约 -138MB）
+- 前提修正后仍有效：插件各自 node_modules 含 typescript 23M × 6。
+- 修订做法：**拷入时只拷生产依赖**（`npm install --omit=dev` 的产物）或拷入后按 `devDependencies` 剔除，而非"拷全再删"。
+- 预估：-138MB（前提：插件 6 个全进包）。
 
 ### A2. 裁剪 onnxruntime-web（tool-rag-local，约 -66MB）
-- `@xenova/transformers` 在 Node 环境只用 `onnxruntime-node`；`onnxruntime-web`（66M）是浏览器用 WASM 版。
-- 方案：`transformers` 配置 `env.backends.onnx.wasm` 不需要时，删 `node_modules/onnxruntime-web` 即可；
-  Node 端自动回退 `onnxruntime-node`。在拷贝进 runtime 时删除该目录。
-- 预期：**-66MB**（rag 插件 261M → ~195M）。
+- 前提修正后仍有效；Node 环境只用 `onnxruntime-node`。
+- 修订：确认 `@xenova/transformers` 在 Node 下 `env.backends.onnx.wasm` 不被引用后删除 `onnxruntime-web`；保留 onnxruntime-node。
+- 预估：-66MB。
 
-### A3. 插件依赖去重 / 符号链接（约 -10MB）
-- 6 个插件各自装了 `@deepseek-ai/cordis`、`@deepseek-ai/dsh-tools` 等公共依赖（各 2.5M × 6）。
-- 方案：拷贝时用 `--link-dest` 或直接依赖 runtime 顶层已存在的 `@deepseek-ai/*`（删除插件内副本，
-  让 Node 向上查找）。预期 **-10~15MB**。
+### A3. 插件公共依赖去重（约 -10~15MB）
+- 前提修正后仍有效，但**收益小、风险中**（版本解析可能失败）。
+- 修订：降级为可选；仅对版本一致的 `@deepseek-ai/cordis`/`dsh-tools` 去重，失败回退保留副本。
 
-### A4.（可选）dsh 顶层 provider 裁剪
-- `@aws-sdk` 66M / `@opentelemetry` 31M 等是 dsh 的多 provider 支持（Bedrock/OpenAI 等）。
-- 若只使用 DeepSeek，可在 `runtime/package.json` 用 `overrides`/删除对应依赖，风险较高（可能破坏 dsh 加载），
-  **建议本期不动**，列为后续可选。
+### A4. dsh 顶层 provider 裁剪（@aws-sdk 66M 等）
+- 维持"高风险、本期不动"，列为后续可选。
 
-### 体积收益汇总（A1+A2+A3）
-| 项 | 当前 | 优化后 |
+### 体积收益汇总（修订后，A0+A1+A2）
+| 场景 | portable | 说明 |
 |---|---|---|
-| portable exe | ~236MB | **~150MB**（约 -36%） |
-| 解压耗时 | ~10min | 预期 **3~4min**（体积减半 + 解压更快） |
+| 当前（插件丢失） | 157MB | 缺插件，不可发布 |
+| 插件重新进包（不做裁剪） | ~215MB | 6 插件 + typescript 等 |
+| 进包 + A1+A2 裁剪 | **~150MB** | 与 v1 预估一致（前提达成后） |
 
-## 三、增自解压速度方案（B）
+---
 
-### B1. `portable.useZip: true`（核心，官方支持）
-- 现状：portable 默认用 **7z + LZMA2** 压缩（`-mx=9`），解压需大量 CPU 解压 + 写盘。
-- 方案：electron-builder 官方 `portable.useZip: true`，改用 **ZIP/Deflate** 压缩——
-  解压接近「纯复制」速度（社区实测大幅提速；electron-builder issue #2548 确认 ZIP 解压非常快）。
-- 代价：体积约 +12%（ZIP 压缩率低于 LZMA2）——但配合 A 组降体积，总体仍显著更小更快。
-- 实施：`dsh-desktop/package.json` 的 `portable` 配置加 `"useZip": true`。
+## 三、增解压速度方案（B）—— 修订后
 
-### B2. `unpackDirName` 固定解压目录（配合缓存）
-- 现状：每次运行都解压到新的随机 temp 目录再清理。
-- 方案：`portable.unpackDirName: "dsh-desktop"` 固定目录；结合已实现的
-  「二次启动缓存」（`%LOCALAPPDATA%\dsh-desktop-cache`），命中缓存直接运行，跳过解压。
-- 预期：首次 ~3min → 二次 **<5s**。
+### B1. `portable.useZip: true`（**第一优先，立即实施**）
+- 已确认 electron-builder 25 支持（scheme.json 有 `useZip`）。
+- 当前 `portable` 仅 `splashImage`，**未启用 useZip**——这是最低成本、最高收益的单一改动。
+- 预期：LZMA2 → ZIP/Deflate，解压接近纯复制，157MB 时代 ~10min → **2~3min 量级**（体积约 +10~12%，被 A 组覆盖）。
+- ⚠️ 风险（v1 遗漏）：本项目使用**自定义 portable.nsi**（二次缓存）。useZip 改变打包结构（`extractEmbeddedAppPackage` vs 直接 File 复制），**必须验证自定义模板与 useZip 兼容**；若冲突，权衡：保留自定义缓存 vs useZip（缓存命中后无需解压，可能 useZip 收益被缓存覆盖）。
 
-### B3.（可选）NSIS `compression` 调优
-- `build.compression: "normal"`（当前）平衡体积/速度；`"store"` 更快但体积 +30%（不推荐单独用）。
-- 建议保持 `normal`，依靠 useZip + 降体积达成目标。
+### B2. `unpackDirName` 固定目录（配合缓存）
+- 仍有效；与已实现的二次缓存（`%LOCALAPPDATA%\dsh-desktop-cache`）配合，二次启动 <5s。
 
-### B4.（已生效）解压期间反馈
-- 已实现 splash 提示（"正在启动，请稍候"），避免用户误以为卡死；保持现状即可。
+### B3. `compression` 保持 normal
+- 维持。
 
-## 四、实施步骤（按序）
+### B4. splash 提示（已生效）
+- 维持。
 
-1. **A1+A2+A3**：改 `scripts/` 中拷贝插件进 runtime 的步骤（新增 `scripts/prune-plugin-deps.sh`）：
-   安装后、拷贝前，对每个 `@dsh-desktop/*` 执行 devDependencies 剔除 + onnxruntime-web 删除 + 公共依赖去重。
-2. **B1**：`dsh-desktop/package.json` `portable.useZip: true`；**B2**：`portable.unpackDirName`。
-3. 重新打包 → 对比体积（预期 portable ≤150MB）。
-4. 计时验证：首次自解压耗时、二次启动（缓存命中）耗时。
-5. 更新 `docs/ROADMAP.md` 与 `CHANGELOG.md`（记入 P1 性能优化项）。
+---
 
-## 五、风险与对策
+## 四、实施步骤（修订后，按优先级）
+
+1. **B1**：`dsh-desktop/package.json` `portable.useZip: true` → 验证与自定义 portable.nsi 兼容（打包后运行一次）。
+2. **A0**：修复插件进包流程（runtime/package.json 声明本地依赖，或拷贝后不再 npm install）→ 重新进包 6 个插件。
+3. **A1**：拷入时只带生产依赖（-138MB）。
+4. **A2**：删除 onnxruntime-web（-66MB）。
+5. 重新打包 → 对比体积（目标 ≤155MB）→ 计时验证（首次自解压、二次缓存启动）。
+6. 更新 ROADMAP/CHANGELOG；视结果发布 v0.2.1 或 v0.3.0。
+
+## 五、验证指标（修订）
+
+- 目标：portable **≤155MB**（含 6 插件）；首次自解压 **≤4min**（useZip 后）；二次启动 **<5s**（缓存命中）。
+- 对照：当前 157MB（缺插件）、236MB 时代 ~10min。
+- 注意：**157MB 基线不可发布**——必须先 A0 恢复插件，再做 A1/A2 减回来。
+
+## 六、风险与对策（修订）
 
 | 风险 | 对策 |
 |---|---|
-| useZip 后体积反增（+12%） | 已被 A 组 -36% 覆盖，净收益仍显著 |
-| 裁剪 onnxruntime-web 后 rag 在浏览器端不可用 | dsh 是 Node 运行时，仅用 onnxruntime-node；文档注明 |
-| 剔除 typescript 影响插件加载 | typescript 仅构建期需要，运行期 `lib/` 已编译完成，安全 |
-| 公共依赖去重后解析失败 | 先验证 dsh 顶层已含同版本 `@deepseek-ai/cordis` 等；失败则回退保留副本 |
-| 自解压仍受 CPU/磁盘限制 | 二次缓存（B2）保证后续启动 <5s，首次慢可接受并有 splash 提示 |
-
-## 六、验证指标
-
-- 目标：portable ≤150MB；首次自解压 ≤4min；二次启动 ≤5s（缓存命中）。
-- 方法：打包后 `du -sh` + 计时运行（首次/二次各一次），与 v0.2.0（236MB / ~10min）对比。
+| useZip 与自定义 portable.nsi 不兼容 | 打包后实测；冲突时二选一：保留自定义缓存模板（二次快）或 useZip（首次快），优先验证兼容性 |
+| npm install 再次清掉插件 | A0 用受管依赖（file: 声明），npm 不再视为多余 |
+| 插件进包后体积反弹到 215MB | A1/A2 抵消至 ≤155MB |
+| 去重解析失败 | 仅版本一致才去重，失败回退副本 |
