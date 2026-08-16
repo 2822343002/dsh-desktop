@@ -39,6 +39,7 @@
     },
     "files": [
       "electron/**/*",
+      "build/**/*",
       "package.json"
     ],
     "extraResources": [
