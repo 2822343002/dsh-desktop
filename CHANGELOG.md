@@ -7,6 +7,11 @@
 - [ ] 应用内一键升级 dsh 版本
 - [ ] 代码签名（Windows Authenticode / macOS notarization）
 
+### 修复
+
+- 内置插件自动注入：主进程启动时基于 `process.resourcesPath` 自动生成 `profiles/web/cordis.patch.yml`（以 `file://` URL 书写插件入口），portable/安装版/win-unpacked 通用，不再依赖固定绝对路径。此前手动写入的 `C:\...` 盘符路径会触发 `ERR_UNSUPPORTED_ESM_URL_SCHEME`，导致插件加载失败、dsh 启动超时、GUI 加载不出来
+- 幂等：patch 文件已含自动注入标记则跳过重写，不覆盖用户自定义配置
+
 ## [0.2.0] - 2026-08-16
 
 ### 性能优化
