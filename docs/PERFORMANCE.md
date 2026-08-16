@@ -77,11 +77,11 @@
 
 ## 三、增解压速度方案（B）—— 修订后
 
-### B1. `portable.useZip: true`（**第一优先，立即实施**）
-- 已确认 electron-builder 25 支持（scheme.json 有 `useZip`）。
-- 当前 `portable` 仅 `splashImage`，**未启用 useZip**——这是最低成本、最高收益的单一改动。
-- 预期：LZMA2 → ZIP/Deflate，解压接近纯复制，157MB 时代 ~10min → **2~3min 量级**（体积约 +10~12%，被 A 组覆盖）。
-- ⚠️ 风险（v1 遗漏）：本项目使用**自定义 portable.nsi**（二次缓存）。useZip 改变打包结构（`extractEmbeddedAppPackage` vs 直接 File 复制），**必须验证自定义模板与 useZip 兼容**；若冲突，权衡：保留自定义缓存 vs useZip（缓存命中后无需解压，可能 useZip 收益被缓存覆盖）。
+### B1. `portable.useZip: true`（**已实测，结论：不兼容，回退**）
+- electron-builder 25 支持 useZip；**已实测启用**。
+- 实测结果：useZip 与深嵌套依赖树不兼容——`@smithy/core/dist-es/.../NodeUseDualstackEndpointConfigOptions.js` 等超长路径文件导致 NSIS zip 内嵌失败（`failed opening file`，`ERR_ELECTRON_BUILDER_CANNOT_EXECUTE`）；清理 `.d.ts` 后仍有 `.js` 超长路径，无法根治。
+- 结论：**已回退 useZip**（保留 LZMA2）。加速改由「降体积（A 组已落地）+ 二次启动缓存（B2）兜底」达成。
+- 备选（未实施）：若日后坚持 useZip，需先裁剪/扁平化 `@aws-sdk`/`@smithy` 深嵌套（属 A4 provider 裁剪范畴，风险高）。
 
 ### B2. `unpackDirName` 固定目录（配合缓存）
 - 仍有效；与已实现的二次缓存（`%LOCALAPPDATA%\dsh-desktop-cache`）配合，二次启动 <5s。

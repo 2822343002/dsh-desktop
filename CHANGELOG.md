@@ -9,6 +9,12 @@
 
 ## [0.2.0] - 2026-08-16
 
+### 性能优化
+
+- 新增 `scripts/bundle-plugins.sh`：打包前按生产依赖形态打入 6 个插件（A0 修复插件丢失：此前 koffi 补装时 npm install 清掉了手动拷贝的插件目录）+ A1 剔除插件 devDependencies（typescript 等）+ A2 删除 onnxruntime-web（Node 仅用 onnxruntime-node）
+- 打包时清理 runtime 全树 `.d.ts`/`.d.ts.map`（类型声明运行时不需要，兼做瘦身）
+- `portable.useZip` 曾启用，但因深嵌套依赖（`@smithy/core/dist-es` 等超长路径）导致 NSIS zip 内嵌失败，已回退（保留 LZMA2 + 二次启动缓存兜底）
+
 ### 主壳新增
 
 - 系统托盘：最小化到托盘、托盘菜单（打开/退出）、窗口关闭常驻后台
