@@ -7,6 +7,13 @@
 - [ ] 应用内一键升级 dsh 版本
 - [ ] 代码签名（Windows Authenticode / macOS notarization）
 
+### 修复（玻璃态 v2：UI 未生效 / 换背景无效果）
+
+- 注入机制改为 `executeJavaScript` 注入带 id 的 `<style>`（幂等、可覆盖），替代 `insertCSS`（会被 SPA 导航清掉且无法覆盖旧样式）
+- 注入时机扩展：`did-finish-load` + `did-navigate` + 延时重试（1.2s/3s），确保 SPA 渲染完成后样式在位
+- 背景层修复：`html/body` 置透明（dsh 自身背景不再盖住玻璃层），渐变/图片用 fixed 层 `z-index:-1`（内容之下、背景之上）
+- 悬浮按钮与主题一并注入（v2 统一），点击走 `window.dshBg.select()` → IPC → 对话框 → 配置落盘 → 重新注入
+
 ### 新增（玻璃态 UI 美化 + 背景自定义）
 
 - 运行时注入玻璃态主题（`electron/lib/glass-theme.js`）：雾面玻璃卡片（backdrop-blur + 高光描边）、深色渐变背景、霓虹 CTA、Hover/Active 动效（150–250ms，scale 0.98），不改 dsh 前端包、升级不覆盖

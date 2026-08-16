@@ -26,7 +26,7 @@ const fs = require('node:fs')
 const { pathToFileURL } = require('node:url')
 const { findFreePort, waitForPort } = require('./lib/net-utils')
 const { resolveRuntimePaths } = require('./lib/runtime')
-const { injectGlassTheme, injectBgFab } = require('./lib/glass-theme')
+const { injectGlassTheme } = require('./lib/glass-theme')
 const { readBgConfig, writeBgConfig, selectBackgroundImage, resetBackground } = require('./lib/bg-store')
 
 const DSH_PORT_DEFAULT = 3080
@@ -232,12 +232,21 @@ async function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null
   })
-  // 页面由启动流程统一加载 dsh Web UI；加载完成后注入玻璃态主题与背景设置按钮
+  // 页面由启动流程统一加载 dsh Web UI；加载完成后注入玻璃态主题与背景设置按钮。
+  // SPA 可能二次导航/重渲染，did-finish-load 后靠延时重试确保样式在位（注入幂等）。
+  const scheduleGlassInject = (delay) => {
+    setTimeout(() => {
+      if (!mainWindow || mainWindow.isDestroyed()) return
+      injectGlassTheme(mainWindow.webContents, readBgConfig())
+    }, delay)
+  }
   mainWindow.webContents.on('did-finish-load', () => {
-    const bg = readBgConfig()
-    injectGlassTheme(mainWindow.webContents, bg)
-    // 等 SPA 渲染完再注入悬浮按钮（避免被框架样式覆盖）
-    setTimeout(() => injectBgFab(mainWindow.webContents), 600)
+    injectGlassTheme(mainWindow.webContents, readBgConfig())
+    scheduleGlassInject(1200)
+    scheduleGlassInject(3000)
+  })
+  mainWindow.webContents.on('did-navigate', () => {
+    scheduleGlassInject(500)
   })
 }
 
