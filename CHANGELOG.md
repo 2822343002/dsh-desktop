@@ -12,11 +12,14 @@
 ### 主壳新增
 
 - 系统托盘：最小化到托盘、托盘菜单（打开/退出）、窗口关闭常驻后台
-- 首次运行引导向导：欢迎 → 工作区 → API Key → preset 四步本地向导，配置落盘（`.credentials.yaml` / `wizard-config.json`）
 - 自动更新：electron-updater 接入，GitHub release feed（`latest.yml`），启动延迟检查 + 下载/重启提示
 - portable 二次启动缓存：自定义 NSIS 模板 + 应用播种 `%LOCALAPPDATA%\dsh-desktop-cache`，命中后跳过自解压，版本失效自动重建
 - 可测性重构：抽出 `lib/net-utils.js` / `lib/runtime.js`，7 项 `node --test` 冒烟测试 + CI 测试步骤
 - CI 三平台构建修复：linux/mac 的 prune 短名参数、homepage/author 元数据、mac 单架构 arm64，三平台全绿
+
+### 移除
+
+- 首次运行引导向导（wizard.html/wizard.js 及主进程向导逻辑）：因完成/跳过无法切换到主界面（回调缺陷），已整体移除；启动后直接加载 dsh Web UI
 
 ### 插件（独立 `@dsh-desktop/*` 包，cordis.yml patch 挂载）
 
