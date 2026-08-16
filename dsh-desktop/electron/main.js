@@ -18,7 +18,7 @@
  *    ../.tools/node-v24.19.0-win-x64/  → node
  *    ../runtime/                       → dsh 运行时
  */
-const { app, BrowserWindow, dialog, Tray, Menu } = require('electron')
+const { app, BrowserWindow, dialog, Tray, Menu, ipcMain } = require('electron')
 const { autoUpdater } = require('electron-updater')
 const { spawn } = require('node:child_process')
 const path = require('node:path')
@@ -26,6 +26,8 @@ const fs = require('node:fs')
 const { pathToFileURL } = require('node:url')
 const { findFreePort, waitForPort } = require('./lib/net-utils')
 const { resolveRuntimePaths } = require('./lib/runtime')
+const { injectGlassTheme, injectBgFab } = require('./lib/glass-theme')
+const { readBgConfig, writeBgConfig, selectBackgroundImage, resetBackground } = require('./lib/bg-store')
 
 const DSH_PORT_DEFAULT = 3080
 const DSH_WAIT_TIMEOUT_MS = 90 * 1000
@@ -230,7 +232,29 @@ async function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null
   })
-  // 页面由启动流程统一加载 dsh Web UI
+  // 页面由启动流程统一加载 dsh Web UI；加载完成后注入玻璃态主题与背景设置按钮
+  mainWindow.webContents.on('did-finish-load', () => {
+    const bg = readBgConfig()
+    injectGlassTheme(mainWindow.webContents, bg)
+    // 等 SPA 渲染完再注入悬浮按钮（避免被框架样式覆盖）
+    setTimeout(() => injectBgFab(mainWindow.webContents), 600)
+  })
+}
+
+// —— 背景设置 IPC（悬浮按钮 / 渲染进程入口） ——
+function registerBgIpc() {
+  ipcMain.handle('bg:select', async () => {
+    const r = await selectBackgroundImage(mainWindow)
+    if (r.ok && mainWindow) {
+      injectGlassTheme(mainWindow.webContents, readBgConfig())
+    }
+    return r
+  })
+  ipcMain.handle('bg:reset', () => {
+    const cfg = resetBackground()
+    if (mainWindow) injectGlassTheme(mainWindow.webContents, cfg)
+    return { ok: true, cfg }
+  })
 }
 
 // —— 系统托盘：最小化到托盘、托盘菜单（打开/退出） ——
@@ -251,6 +275,22 @@ function createTray() {
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: '打开主界面', click: showMainWindow },
+      { type: 'separator' },
+      {
+        label: '设置背景图片…',
+        click: async () => {
+          const r = await selectBackgroundImage(mainWindow)
+          if (r.ok && mainWindow) injectGlassTheme(mainWindow.webContents, readBgConfig())
+          else if (r.error) log('[dsh-desktop] 背景设置失败:', r.error)
+        },
+      },
+      {
+        label: '重置为默认背景',
+        click: () => {
+          const cfg = resetBackground()
+          if (mainWindow) injectGlassTheme(mainWindow.webContents, cfg)
+        },
+      },
       { type: 'separator' },
       {
         label: '退出',
@@ -343,6 +383,7 @@ if (!gotLock) {
       log('[dsh-desktop] 使用端口', port)
       // 自动注入内置插件（portable/安装版通用，file:// URL 路径）
       ensurePluginPatch()
+      registerBgIpc()
       await startDsh(port)
       await waitForPort(port, DSH_WAIT_TIMEOUT_MS)
       await createWindow()
