@@ -26,8 +26,8 @@ const fs = require('node:fs')
 const { pathToFileURL } = require('node:url')
 const { findFreePort, waitForPort } = require('./lib/net-utils')
 const { resolveRuntimePaths } = require('./lib/runtime')
-const { injectGlassTheme } = require('./lib/glass-theme')
 const { readBgConfig, writeBgConfig, selectBackgroundImage, resetBackground } = require('./lib/bg-store')
+const { applyBackground } = require('./lib/bg-apply')
 
 const DSH_PORT_DEFAULT = 3080
 const DSH_WAIT_TIMEOUT_MS = 90 * 1000
@@ -232,21 +232,11 @@ async function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null
   })
-  // 页面由启动流程统一加载 dsh Web UI；加载完成后注入玻璃态主题与背景设置按钮。
-  // SPA 可能二次导航/重渲染，did-finish-load 后靠延时重试确保样式在位（注入幂等）。
-  const scheduleGlassInject = (delay) => {
-    setTimeout(() => {
-      if (!mainWindow || mainWindow.isDestroyed()) return
-      injectGlassTheme(mainWindow.webContents, readBgConfig())
-    }, delay)
-  }
+  // 页面由启动流程统一加载 dsh Web UI；玻璃态样式由 patch-web-ui.sh 原生写入
+  // dsh 前端（dist/assets/glass.css + index.html <link>），无需运行时注入。
+  // 首次加载完成后应用已配置的背景图（若存在），并 reload 使原生 CSS 生效。
   mainWindow.webContents.on('did-finish-load', () => {
-    injectGlassTheme(mainWindow.webContents, readBgConfig())
-    scheduleGlassInject(1200)
-    scheduleGlassInject(3000)
-  })
-  mainWindow.webContents.on('did-navigate', () => {
-    scheduleGlassInject(500)
+    applyBackground()
   })
 }
 
@@ -254,14 +244,14 @@ async function createWindow() {
 function registerBgIpc() {
   ipcMain.handle('bg:select', async () => {
     const r = await selectBackgroundImage(mainWindow)
-    if (r.ok && mainWindow) {
-      injectGlassTheme(mainWindow.webContents, readBgConfig())
+    if (r.ok) {
+      applyBackground(mainWindow && mainWindow.webContents)
     }
     return r
   })
   ipcMain.handle('bg:reset', () => {
     const cfg = resetBackground()
-    if (mainWindow) injectGlassTheme(mainWindow.webContents, cfg)
+    applyBackground(mainWindow && mainWindow.webContents)
     return { ok: true, cfg }
   })
 }
@@ -289,15 +279,15 @@ function createTray() {
         label: '设置背景图片…',
         click: async () => {
           const r = await selectBackgroundImage(mainWindow)
-          if (r.ok && mainWindow) injectGlassTheme(mainWindow.webContents, readBgConfig())
+          if (r.ok) applyBackground(mainWindow && mainWindow.webContents)
           else if (r.error) log('[dsh-desktop] 背景设置失败:', r.error)
         },
       },
       {
         label: '重置为默认背景',
         click: () => {
-          const cfg = resetBackground()
-          if (mainWindow) injectGlassTheme(mainWindow.webContents, cfg)
+          resetBackground()
+          applyBackground(mainWindow && mainWindow.webContents)
         },
       },
       { type: 'separator' },

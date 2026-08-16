@@ -7,6 +7,12 @@
 - [ ] 应用内一键升级 dsh 版本
 - [ ] 代码签名（Windows Authenticode / macOS notarization）
 
+### 修复（玻璃态 v3：原生修改 dsh 界面，非外部注入）
+
+- 玻璃态主题**直接写入 dsh 原生前端**：`scripts/patch-web-ui.sh` 在打包时生成 `dist/assets/glass.css` 并在 `index.html` 追加 `<link>` 引用——页面天然加载，作用于 dsh 自身元素（body 渐变背景、玻璃卡片、霓虹 CTA），不再用 executeJavaScript/insertCSS 在外部注入
+- 背景自定义（原生）：`electron/lib/bg-apply.js` 把用户背景图复制到 dsh `dist/assets/bg-user.jpg`、重写 glass.css 的 `--user-bg-image` 变量、reload 页面生效；入口为托盘菜单「设置背景图片…/重置为默认背景」
+- 移除 v2 的盒子式方案：悬浮 FAB、`executeJavaScript` 注入 style、`injectGlassTheme` 运行时注入层全部删除
+
 ### 修复（玻璃态 v2：UI 未生效 / 换背景无效果）
 
 - 注入机制改为 `executeJavaScript` 注入带 id 的 `<style>`（幂等、可覆盖），替代 `insertCSS`（会被 SPA 导航清掉且无法覆盖旧样式）
