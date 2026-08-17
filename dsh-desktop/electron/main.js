@@ -343,14 +343,15 @@ if (!gotLock) {
       log('[dsh-desktop] 使用端口', port)
       // 自动注入内置插件（portable/安装版通用，file:// URL 路径）
       ensurePluginPatch()
+      // 播种 portable 缓存（必须完成：否则缓存从未建立，每次全量自解压 5 分钟+）。
+      // 二次启动命中缓存时内部直接返回，几乎零开销；仅首次播种复制一次。
+      await seedPortableCache()
       await startDsh(port)
       await waitForPort(port, DSH_WAIT_TIMEOUT_MS)
       await createWindow()
       await mainWindow.loadURL(`http://127.0.0.1:${port}/`)
       createTray()
       setupAutoUpdater()
-      // 后台播种 portable 缓存（不阻塞 UI；仅 portable 模式生效）
-      seedPortableCache()
     } catch (err) {
       log('[dsh-desktop] 启动失败：', err)
       dialog.showErrorBox('启动失败', String((err && err.message) || err))
