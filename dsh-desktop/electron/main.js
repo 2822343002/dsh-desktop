@@ -115,6 +115,21 @@ const CACHE_REBUILD_FLAG = 'rebuild.flag'
  * - 版本不匹配且当前运行在临时解压目录 → 删除旧缓存并重建为新版本。
  * - 异常状态（运行在旧缓存内）→ 写入 rebuild.flag，通知 NSIS 下次走解压流程。
  */
+/**
+ * 复制目录树，复制期间临时关闭 Electron 的 asar 虚拟文件系统。
+ * fs.promises.cp 复制 app.asar 时会被 Electron 拦截（"Invalid package"），
+ * 导致 portable 缓存播种失败；process.noAsar 是官方绕过开关。
+ */
+async function copyTreeNoAsar(src, dst) {
+  const prev = process.noAsar
+  process.noAsar = true
+  try {
+    await fs.promises.cp(src, dst, { recursive: true })
+  } finally {
+    process.noAsar = prev
+  }
+}
+
 async function seedPortableCache() {
   try {
     // 仅 portable 模式（NSIS 设置该环境变量）才需要
@@ -138,7 +153,7 @@ async function seedPortableCache() {
         log('[dsh-desktop] portable 缓存版本不匹配，重建:', cachedVersion, '->', app.getVersion())
         fs.rmSync(cacheRoot, { recursive: true, force: true })
         fs.mkdirSync(cacheRoot, { recursive: true })
-        await fs.promises.cp(srcDir, cacheRoot, { recursive: true })
+        await copyTreeNoAsar(srcDir, cacheRoot)
         fs.writeFileSync(versionFile, app.getVersion())
         log('[dsh-desktop] portable 缓存已重建:', cacheRoot)
         return true
@@ -155,7 +170,7 @@ async function seedPortableCache() {
 
     // 无缓存：首次播种
     fs.mkdirSync(cacheRoot, { recursive: true })
-    await fs.promises.cp(srcDir, cacheRoot, { recursive: true })
+    await copyTreeNoAsar(srcDir, cacheRoot)
     fs.writeFileSync(versionFile, app.getVersion())
     log('[dsh-desktop] portable 缓存已播种:', cacheRoot)
     return true
