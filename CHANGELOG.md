@@ -7,25 +7,6 @@
 - [ ] 应用内一键升级 dsh 版本
 - [ ] 代码签名（Windows Authenticode / macOS notarization）
 
-### 修复（玻璃态 v3：原生修改 dsh 界面，非外部注入）
-
-- 玻璃态主题**直接写入 dsh 原生前端**：`scripts/patch-web-ui.sh` 在打包时生成 `dist/assets/glass.css` 并在 `index.html` 追加 `<link>` 引用——页面天然加载，作用于 dsh 自身元素（body 渐变背景、玻璃卡片、霓虹 CTA），不再用 executeJavaScript/insertCSS 在外部注入
-- 背景自定义（原生）：`electron/lib/bg-apply.js` 把用户背景图复制到 dsh `dist/assets/bg-user.jpg`、重写 glass.css 的 `--user-bg-image` 变量、reload 页面生效；入口为托盘菜单「设置背景图片…/重置为默认背景」
-- 移除 v2 的盒子式方案：悬浮 FAB、`executeJavaScript` 注入 style、`injectGlassTheme` 运行时注入层全部删除
-
-### 修复（玻璃态 v2：UI 未生效 / 换背景无效果）
-
-- 注入机制改为 `executeJavaScript` 注入带 id 的 `<style>`（幂等、可覆盖），替代 `insertCSS`（会被 SPA 导航清掉且无法覆盖旧样式）
-- 注入时机扩展：`did-finish-load` + `did-navigate` + 延时重试（1.2s/3s），确保 SPA 渲染完成后样式在位
-- 背景层修复：`html/body` 置透明（dsh 自身背景不再盖住玻璃层），渐变/图片用 fixed 层 `z-index:-1`（内容之下、背景之上）
-- 悬浮按钮与主题一并注入（v2 统一），点击走 `window.dshBg.select()` → IPC → 对话框 → 配置落盘 → 重新注入
-
-### 新增（玻璃态 UI 美化 + 背景自定义）
-
-- 运行时注入玻璃态主题（`electron/lib/glass-theme.js`）：雾面玻璃卡片（backdrop-blur + 高光描边）、深色渐变背景、霓虹 CTA、Hover/Active 动效（150–250ms，scale 0.98），不改 dsh 前端包、升级不覆盖
-- 背景自定义（`electron/lib/bg-store.js`）：3 档渐变预设（深空蓝紫/墨绿/暖金）+ 自定义图片上传（托盘菜单「设置背景图片…」/ 悬浮 🎨 按钮 / IPC `bg:select`），图片自动覆盖玻璃模糊层（blur 24px + 亮度 0.7），配置持久化 `userData/bg-config.json`，重启保持
-- 测试：`test/glass-theme.test.js` 6 项（CSS 生成/预设/图片 URL/透明度/悬浮按钮），node --test 全绿（13/13）
-
 ### 修复
 
 - 内置插件自动注入：主进程启动时基于 `process.resourcesPath` 自动生成 `profiles/web/cordis.patch.yml`（以 `file://` URL 书写插件入口），portable/安装版/win-unpacked 通用，不再依赖固定绝对路径。此前手动写入的 `C:\...` 盘符路径会触发 `ERR_UNSUPPORTED_ESM_URL_SCHEME`，导致插件加载失败、dsh 启动超时、GUI 加载不出来

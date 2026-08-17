@@ -1,9 +1,4 @@
 'use strict'
 
-// 预加载脚本：向渲染进程暴露最小桥接（背景设置入口等）。
-const { contextBridge, ipcRenderer } = require('electron')
-
-contextBridge.exposeInMainWorld('dshBg', {
-  select: () => ipcRenderer.invoke('bg:select'),
-  reset: () => ipcRenderer.invoke('bg:reset'),
-})
+// 预加载脚本：当前保持最小化，无需向渲染进程暴露额外桥接能力。
+// dsh Web UI 在独立渲染进程中运行，主进程与渲染进程间暂无自定义 IPC 需求。

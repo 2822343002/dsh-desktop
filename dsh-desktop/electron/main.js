@@ -18,7 +18,7 @@
  *    ../.tools/node-v24.19.0-win-x64/  → node
  *    ../runtime/                       → dsh 运行时
  */
-const { app, BrowserWindow, dialog, Tray, Menu, ipcMain } = require('electron')
+const { app, BrowserWindow, dialog, Tray, Menu } = require('electron')
 const { autoUpdater } = require('electron-updater')
 const { spawn } = require('node:child_process')
 const path = require('node:path')
@@ -26,8 +26,6 @@ const fs = require('node:fs')
 const { pathToFileURL } = require('node:url')
 const { findFreePort, waitForPort } = require('./lib/net-utils')
 const { resolveRuntimePaths } = require('./lib/runtime')
-const { readBgConfig, writeBgConfig, selectBackgroundImage, resetBackground } = require('./lib/bg-store')
-const { applyBackground } = require('./lib/bg-apply')
 
 const DSH_PORT_DEFAULT = 3080
 const DSH_WAIT_TIMEOUT_MS = 90 * 1000
@@ -232,28 +230,7 @@ async function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null
   })
-  // 页面由启动流程统一加载 dsh Web UI；玻璃态样式由 patch-web-ui.sh 原生写入
-  // dsh 前端（dist/assets/glass.css + index.html <link>），无需运行时注入。
-  // 首次加载完成后应用已配置的背景图（若存在），并 reload 使原生 CSS 生效。
-  mainWindow.webContents.on('did-finish-load', () => {
-    applyBackground()
-  })
-}
-
-// —— 背景设置 IPC（悬浮按钮 / 渲染进程入口） ——
-function registerBgIpc() {
-  ipcMain.handle('bg:select', async () => {
-    const r = await selectBackgroundImage(mainWindow)
-    if (r.ok) {
-      applyBackground(mainWindow && mainWindow.webContents)
-    }
-    return r
-  })
-  ipcMain.handle('bg:reset', () => {
-    const cfg = resetBackground()
-    applyBackground(mainWindow && mainWindow.webContents)
-    return { ok: true, cfg }
-  })
+  // 页面由启动流程统一加载 dsh Web UI
 }
 
 // —— 系统托盘：最小化到托盘、托盘菜单（打开/退出） ——
@@ -274,22 +251,6 @@ function createTray() {
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: '打开主界面', click: showMainWindow },
-      { type: 'separator' },
-      {
-        label: '设置背景图片…',
-        click: async () => {
-          const r = await selectBackgroundImage(mainWindow)
-          if (r.ok) applyBackground(mainWindow && mainWindow.webContents)
-          else if (r.error) log('[dsh-desktop] 背景设置失败:', r.error)
-        },
-      },
-      {
-        label: '重置为默认背景',
-        click: () => {
-          resetBackground()
-          applyBackground(mainWindow && mainWindow.webContents)
-        },
-      },
       { type: 'separator' },
       {
         label: '退出',
@@ -382,7 +343,6 @@ if (!gotLock) {
       log('[dsh-desktop] 使用端口', port)
       // 自动注入内置插件（portable/安装版通用，file:// URL 路径）
       ensurePluginPatch()
-      registerBgIpc()
       await startDsh(port)
       await waitForPort(port, DSH_WAIT_TIMEOUT_MS)
       await createWindow()
