@@ -7,6 +7,16 @@
 - [ ] 应用内一键升级 dsh 版本
 - [ ] 代码签名（Windows Authenticode / macOS notarization）
 
+### 测试（2026-08-19 最终打包验证）
+
+- 重新打包双产物（portable 196.7MB + Setup 196.9MB，DONE-0）：win-unpacked 测试通过（HTTP 200、0 错误、6 插件、koffi、自动注入 patch 正常）
+- portable 首次启动测试：自动化环境未通过（进程退出/缓存未建立，疑似环境阻断），需本机验证二次启动缓存命中
+- Setup 静默安装测试：自动化环境两次超时未完成安装，需本机安装验证
+
+### 回退
+
+- **撤销玻璃态 UI 修改**（4 个提交：`e95daa1`/`3021329`/`be82b16`/`e95cf13`），代码恢复至 UI 前（`0c2a03b`）：删除 `patch-web-ui.sh`、`glass-theme.js`、`bg-apply.js`、`bg-store.js` 及注入/背景自定义逻辑，dsh web UI 恢复原生界面
+
 ### 修复
 
 - 内置插件自动注入：主进程启动时基于 `process.resourcesPath` 自动生成 `profiles/web/cordis.patch.yml`（以 `file://` URL 书写插件入口），portable/安装版/win-unpacked 通用，不再依赖固定绝对路径。此前手动写入的 `C:\...` 盘符路径会触发 `ERR_UNSUPPORTED_ESM_URL_SCHEME`，导致插件加载失败、dsh 启动超时、GUI 加载不出来
